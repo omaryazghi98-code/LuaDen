@@ -176,6 +176,7 @@ int main() {
   // Among other cookies, too.
   CHECK(Status(get("/api/files/games", "a=b; " + cookie + "; c=d")) == 200);
 
+  std::string answer;
   std::uint32_t imported_app = 0;
   LuaManifestProfile imported_profile;
   service.SetLuaManifestProfileHandler([&](std::uint32_t app, LuaManifestProfile profile, std::string*) {
@@ -197,7 +198,7 @@ int main() {
   CHECK(Status(post("/api/files/lua-profile?game=12210", cookie, lua_profile, "")) == 403);
 
   // Games.
-  auto answer = get("/api/files/games", cookie);
+  answer = get("/api/files/games", cookie);
   CHECK(Status(answer) == 200);
   auto body = Body(answer);
   CHECK(body.find("\"name\":\"Grand \\\"Theft\\\" Auto IV\"") != std::string::npos && body.find("\"running\":true") != std::string::npos);
