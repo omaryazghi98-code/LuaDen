@@ -30,7 +30,10 @@ int main() {
   assert(!ParseLuaManifestProfile("addappid(123, 1, \"key\")\n", &profile, &reason));
   assert(!reason.empty());
   assert(!ParseLuaManifestProfile("setManifestid(1, \"2\") os.execute('x')\n", &profile, &reason));
-  assert(!ParseLuaManifestProfile("setManifestid(1, \"2\", 0)\n", &profile, &reason));
+  assert(ParseLuaManifestProfile("SETMANIFESTID(1, \"2\", 0)\n", &profile, &reason));
+  assert(profile.pins.size() == 1 && profile.pins[0].size_on_disk == 0);
+  const std::string bom = "\xEF\xBB\xBFsetManifestid(4, \"5\")\n";
+  assert(ParseLuaManifestProfile(bom, &profile, &reason) && profile.pins[0].depot_id == 4);
   assert(!ParseLuaManifestProfile("setManifestid(0, \"2\")\n", &profile, &reason));
   assert(!ParseLuaManifestProfile("setManifestid(4294967296, \"2\")\n", &profile, &reason));
   assert(!ParseLuaManifestProfile("setManifestid(1, \"0\")\n", &profile, &reason));
