@@ -24,3 +24,10 @@ jobs:
           dotnet-version: "8.0.x"
       - name: Build standalone companion
         run: dotnet build tools/LuaDenCompanion/LuaDenCompanion.csproj --configuration Release
+      - name: Publish self-contained Windows app
+        run: dotnet publish tools/LuaDenCompanion/LuaDenCompanion.csproj --configuration Release --runtime win-x64 --self-contained true --output artifacts/LuaDenCompanion
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LuaDenCompanion-win-x64
+          path: artifacts/LuaDenCompanion/
+          if-no-files-found: error
