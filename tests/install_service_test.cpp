@@ -823,9 +823,9 @@ void InstallOptionsReachTheRunner(const std::filesystem::path& root) {
   {
     InstallService service(runner, root.string());
     runner.block = true;
-    service.Install(SteamId(900), std::nullopt, {}, {"german", "beta"});
+    service.Install(SteamId(900), std::nullopt, {}, {"german", "beta", {}, {{1001, LuaManifestPin{1001, 90001, 5000}}, {1002, LuaManifestPin{1002, 90002, 6000}}}});
     AwaitAt(__LINE__, service, [](const InstallSnapshot& s) { auto* job = JobOf(s, SteamId(900)); return job && job->state == InstallJobState::kRunning; });
-    CHECK(options_at(root / "900") == (InstallOptions{"german", "beta"}));
+    CHECK(options_at(root / "900") == (InstallOptions{"german", "beta", {}, {{1001, LuaManifestPin{1001, 90001, 5000}}, {1002, LuaManifestPin{1002, 90002, 6000}}}}));
     service.Install(SteamId(901));
     service.Install(SteamId(902), std::nullopt, {}, {"french", {}});
     service.Pause(SteamId(902));
@@ -847,7 +847,7 @@ void InstallOptionsReachTheRunner(const std::filesystem::path& root) {
       const auto at = text.find(id + "\t");
       return at == std::string::npos ? std::string() : text.substr(at, text.find('\n', at) - at);
     };
-    CHECK(line_of("900") == "900\tinternal\t0\tlang=german\tbranch=beta");
+    CHECK(line_of("900") == "900\tinternal\t0\tlang=german\tbranch=beta\tpins=1001:90001:5000,1002:90002:6000");
     CHECK(line_of("901") == "901\tinternal\t0");
     CHECK(line_of("902") == "902\tinternal\t0\tpaused\tlang=french");
     CHECK(line_of("903") == "903\tinternal\t0");
