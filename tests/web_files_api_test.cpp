@@ -178,8 +178,8 @@ int main() {
 
   std::string answer;
   std::uint32_t imported_app = 0;
-  LuaManifestProfile imported_profile;
-  service.SetLuaManifestProfileHandler([&](std::uint32_t app, LuaManifestProfile profile, std::string*) {
+  playden::steam::LuaManifestProfile imported_profile;
+  service.SetLuaManifestProfileHandler([&](std::uint32_t app, playden::steam::LuaManifestProfile profile, std::string*) {
     imported_app = app;
     imported_profile = std::move(profile);
     return true;
