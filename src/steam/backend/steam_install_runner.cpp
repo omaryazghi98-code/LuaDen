@@ -376,6 +376,7 @@ InstallRunner::Result SteamInstallRunner::Run(const StoredSession& session, std:
   InstallTarget target;
   target.app_id = id;
   target.excluded_dlc.assign(excluded.begin(), excluded.end());
+  target.manifest_pins = options.manifest_pins;
   target.install_root = root;
   // Like the reference, only depots this account's licenses grant are installed. Accounts with
   // thousands of licenses take a minute here (issue #47), so the player sees this step.
@@ -458,6 +459,7 @@ InstallRunner::Result SteamInstallRunner::Run(const StoredSession& session, std:
   selection.language = language;
   if (!options.branch.empty()) selection.branch = options.branch;
   selection.excluded_dlc = excluded;
+  selection.manifest_pins = options.manifest_pins;
   SelectionResult selected;
   const bool any = SelectDepots(*app, dlc_apps, owned_apps, entitlements.owned_depots, selection, &selected);
   // Every depot left out and why, as depot:reason.
