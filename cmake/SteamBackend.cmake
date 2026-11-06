@@ -225,7 +225,7 @@ function(playden_register_steam_backend_tests)
     add_test(NAME auth_messages COMMAND auth_messages_test
         "${CMAKE_SOURCE_DIR}/fixtures/steam/auth")
 
-    foreach(test_name steam_json token_claims lua_manifest_profile)
+    foreach(test_name steam_json token_claims lua_manifest_profile lua_manifest_profile_store)
         add_executable(${test_name}_test "${CMAKE_SOURCE_DIR}/tests/${test_name}_test.cpp")
         target_link_libraries(${test_name}_test PRIVATE playden_steam_protocol)
         add_test(NAME ${test_name} COMMAND ${test_name}_test)
