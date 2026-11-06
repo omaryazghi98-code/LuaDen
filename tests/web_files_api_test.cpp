@@ -147,7 +147,7 @@ int main() {
 
   // Unpaired: nothing about a game, nothing changes.
   CHECK(Body(get("/api/pair/status")).find("\"paired\":false") != std::string::npos);
-  for (const std::string& target : std::vector<std::string>{"/api/files/games", "/api/files/game?game=steam-12210", "/api/files/list?" + game + "user", "/api/files/download?" + game + "game&path=game.exe",
+  for (const std::string& target : std::vector<std::string>{"/api/files/games", "/api/files/game?game=steam-12210", "/api/files/lua-profile?game=12210", "/api/files/list?" + game + "user", "/api/files/download?" + game + "game&path=game.exe",
                                    "/api/files/zip?" + game + "game", "/api/files/text?" + game + "game&path=game.exe"})
     CHECK(Status(get(target)) == 401);
   for (const std::string& target : std::vector<std::string>{"/api/files/upload?" + game + "game&path=x", "/api/files/mkdir?" + game + "game&path=x", "/api/files/delete?" + game + "game&path=game.exe", "/api/files/restore?" + game + "game&path=x"}) {
@@ -175,6 +175,26 @@ int main() {
   CHECK(Body(get("/api/pair/status", cookie)).find("\"paired\":true") != std::string::npos);
   // Among other cookies, too.
   CHECK(Status(get("/api/files/games", "a=b; " + cookie + "; c=d")) == 200);
+
+  std::uint32_t imported_app = 0;
+  LuaManifestProfile imported_profile;
+  service.SetLuaManifestProfileHandler([&](std::uint32_t app, LuaManifestProfile profile, std::string*) {
+    imported_app = app;
+    imported_profile = std::move(profile);
+    return true;
+  });
+  const std::string lua_profile =
+      "-- LuaTools profile\n"
+      "addappid(12210, 1, \"ignored-key\")\n"
+      "setManifestid(122101, \"987654321012345678\", 1234567)\n"
+      "setManifestid(122102, \"987654321012345679\")\n";
+  answer = post("/api/files/lua-profile?game=12210", cookie, lua_profile);
+  CHECK(Status(answer) == 200 && Body(answer).find("\"pins\":2") != std::string::npos);
+  CHECK(imported_app == 12210 && imported_profile.pins.size() == 2);
+  CHECK(imported_profile.pins[0].depot_id == 122101 && imported_profile.pins[0].manifest_gid == 987654321012345678ull);
+  CHECK(Status(post("/api/files/lua-profile?game=99999", cookie, lua_profile)) == 404);
+  CHECK(Status(post("/api/files/lua-profile?game=12210", cookie, "addappid(12210)\n")) == 400);
+  CHECK(Status(post("/api/files/lua-profile?game=12210", cookie, lua_profile, "")) == 403);
 
   // Games.
   auto answer = get("/api/files/games", cookie);
