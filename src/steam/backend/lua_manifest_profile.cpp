@@ -1,6 +1,7 @@
 #include "steam/backend/lua_manifest_profile.h"
 
 #include <charconv>
+#include <cerrno>
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
@@ -169,7 +170,7 @@ bool LoadLuaManifestProfileStore(const std::filesystem::path& path, LuaManifestP
   std::ifstream input(path, std::ios::binary);
   if (!input) return StoreFail(reason, "The profile library could not be opened.");
   std::string contents((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
-  if (!input.eof() && input.fail()) return StoreFail(reason, "The profile library could not be read.");
+  if (input.bad()) return StoreFail(reason, "The profile library could not be read.");
   if (contents.size() > kMaxLuaManifestProfileStoreBytes)
     return StoreFail(reason, "The profile library exceeds the 8 MiB limit.");
 
@@ -185,7 +186,7 @@ bool LoadLuaManifestProfileStore(const std::filesystem::path& path, LuaManifestP
     const auto tab = line.find('\t');
     if (tab == std::string_view::npos) return StoreFail(reason, "A profile-library row is malformed.");
     const auto app_text = line.substr(0, tab);
-    const auto pin_text = line.substr(tab + 1);
+    std::string_view pin_text = line.substr(tab + 1);
     std::uint32_t app = 0;
     const auto parsed_app = std::from_chars(app_text.data(), app_text.data() + app_text.size(), app);
     if (parsed_app.ec != std::errc{} || parsed_app.ptr != app_text.data() + app_text.size() || app == 0)
