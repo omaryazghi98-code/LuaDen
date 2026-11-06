@@ -9214,7 +9214,9 @@ void Simulation::activate() {
                     pending_install_requests_.push_back({InstallRequestKind::Install, id, install_volume_id_, false, install_language_,
                                                          install_version(id) ? install_version_ : std::string(),
                                                          assessment.installed_bytes,
-                                                         install_excluded_dlc(id)});
+                                                         install_excluded_dlc(id),
+                                                         lua_manifest_profiles_.count(id) ? lua_manifest_profiles_.at(id)
+                                                                                          : std::map<std::uint32_t, playden::steam::LuaManifestPin>{}});
                 install_volume_id_.clear();
                 install_language_.clear();
                 install_dlc_choice_.clear();
@@ -11273,6 +11275,17 @@ std::string Simulation::snapshot() const {
     return output.value;
 }
 
+
+void Simulation::SetLuaManifestProfile(GameId id, playden::steam::LuaManifestProfile profile) {
+    if (!id.valid() || id.store != Store::kSteam) return;
+    std::map<std::uint32_t, playden::steam::LuaManifestPin> pins;
+    for (const auto& pin : profile.pins) {
+        if (pin.depot_id == 0 || pin.manifest_gid == 0) continue;
+        pins[pin.depot_id] = pin;
+    }
+    if (pins.empty()) lua_manifest_profiles_.erase(id);
+    else lua_manifest_profiles_[id] = std::move(pins);
+}
 
 void Simulation::SetSettingsData(std::vector<rt::SettingsPreset> presets, std::vector<rt::GameRecipe> recipes) {
     settings_presets_ = std::move(presets);
