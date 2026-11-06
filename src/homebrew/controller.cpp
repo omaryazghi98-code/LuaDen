@@ -2112,7 +2112,8 @@ void Controller::TickInstalls() {
         // version's estimate is reserved, not the public one.
         const auto estimate = request.install_bytes ? request.install_bytes
                               : game == games.end() ? std::nullopt : game->install_bytes;
-        installs_->Install(request.game_id, estimate, request.volume_id, {request.language, request.branch, request.excluded_dlc});
+        installs_->Install(request.game_id, estimate, request.volume_id,
+                           {request.language, request.branch, request.excluded_dlc, request.manifest_pins});
         break;
       }
       case InstallRequestKind::Update: {
