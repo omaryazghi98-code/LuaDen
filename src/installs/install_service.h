@@ -3,6 +3,7 @@
 #include "installs/install_record.h"
 #include "library/model.h"
 #include "steam/download_rate.h"
+#include "steam/backend/lua_manifest_profile.h"
 
 #include <atomic>
 #include <chrono>
@@ -54,8 +55,16 @@ struct InstallOptions {
   std::string language;  // a Steam content language code ("german")
   std::string branch;    // a Steam branch name
   std::vector<std::uint32_t> excluded_dlc;  // DLC the player turned off, sorted: not claimed, downloaded or reported
+  std::map<std::uint32_t, LuaManifestPin> manifest_pins;  // imported LuaTools manifest versions
   bool operator==(const InstallOptions& other) const {
-    return language == other.language && branch == other.branch && excluded_dlc == other.excluded_dlc;
+    if (language != other.language || branch != other.branch || excluded_dlc != other.excluded_dlc ||
+        manifest_pins.size() != other.manifest_pins.size()) return false;
+    for (const auto& [id, pin] : manifest_pins) {
+      const auto found = other.manifest_pins.find(id);
+      if (found == other.manifest_pins.end() || pin.depot_id != found->second.depot_id ||
+          pin.manifest_gid != found->second.manifest_gid || pin.size_on_disk != found->second.size_on_disk) return false;
+    }
+    return true;
   }
   bool operator!=(const InstallOptions& other) const { return !(*this == other); }
 };
