@@ -21,6 +21,7 @@ bool Fail(std::string* reason, const char* message) {
 }
 
 bool ReadUnsigned(std::string_view* input, std::uint64_t* value) {
+  *input = Trim(*input);
   const std::string_view text = *input;
   std::size_t digits = 0;
   while (digits < text.size() && text[digits] >= '0' && text[digits] <= '9') ++digits;
