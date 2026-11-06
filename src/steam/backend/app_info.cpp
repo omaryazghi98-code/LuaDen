@@ -514,9 +514,19 @@ bool SelectDepots(const AppInfo& app, const std::vector<AppInfo>& dlc_apps, cons
     depot.owner_app = owner;
     // The chosen branch's manifest, and nothing else: no fallback to the public one.
     const auto manifest = UsableManifest(raw, branch);
-    depot.manifest_gid = manifest ? std::optional<std::uint64_t>(manifest->gid) : std::nullopt;
-    depot.size = manifest ? manifest->size : 0;
-    depot.download_size = manifest ? manifest->download : 0;
+    const auto pin = selection.manifest_pins.find(raw.id);
+    if (pin != selection.manifest_pins.end()) {
+      // The pin changes only the requested manifest. The following entitlement and DLC gates are unchanged;
+      // Steam's depot-access request is still the authority on whether this account can fetch it.
+      if (pin->second.depot_id != raw.id || pin->second.manifest_gid == 0) return false;
+      depot.manifest_gid = pin->second.manifest_gid;
+      depot.size = pin->second.size_on_disk != 0 ? pin->second.size_on_disk : (manifest ? manifest->size : 0);
+      depot.download_size = manifest ? manifest->download : 0;
+    } else {
+      depot.manifest_gid = manifest ? std::optional<std::uint64_t>(manifest->gid) : std::nullopt;
+      depot.size = manifest ? manifest->size : 0;
+      depot.download_size = manifest ? manifest->download : 0;
+    }
     const auto same = std::find_if(listed.begin(), listed.end(), [&](const DepotInfo& seen) { return seen.id == depot.id; });
     if (same == listed.end()) {
       listed.push_back(std::move(depot));
@@ -550,6 +560,15 @@ bool SelectDepots(const AppInfo& app, const std::vector<AppInfo>& dlc_apps, cons
     out.rejected.clear();
     out.reason = "This game lists conflicting depots.";
     return false;
+  }
+  // Keep stale profile rows visible in diagnostics, but never manufacture a depot absent from appinfo.
+  for (const auto& [id, pin] : selection.manifest_pins) {
+    if (id == 0 || pin.depot_id != id || pin.manifest_gid == 0) {
+      out.reason = "The imported Lua profile contains an invalid manifest pin.";
+      return false;
+    }
+    if (std::none_of(listed.begin(), listed.end(), [id](const DepotInfo& depot) { return depot.id == id; }))
+      out.rejected.push_back({id, app.app_id, "profile-depot-not-listed"});
   }
 
   // The per-depot gates, in order.

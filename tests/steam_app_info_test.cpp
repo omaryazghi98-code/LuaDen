@@ -868,6 +868,19 @@ void TestVersions() {
   CHECK(SelectDepots(app, {}, {7000}, std::nullopt, DepotSelection{}, &result));
   CHECK((Ids(result.depots) == U32s{7001, 7002}) && RejectedAs(result, 7003) == "branch" && RejectedAs(result, 7004) == "os");
 
+  // LuaTools pins override only the manifest GID for a listed depot.
+  DepotSelection pinned;
+  pinned.manifest_pins.emplace(7001, LuaManifestPin{7001, 777777777777ull, 25000000000ull});
+  CHECK(SelectDepots(app, {}, {7000}, std::nullopt, pinned, &result));
+  CHECK(result.depots[0].manifest_gid == 777777777777ull && result.depots[0].size == 25000000000ull);
+  // An imported pin cannot grant access to an unowned depot.
+  CHECK(SelectDepots(app, {}, {7000}, std::set<std::uint32_t>{7002}, pinned, &result));
+  CHECK(RejectedAs(result, 7001) == "licence");
+  // Unknown rows remain diagnostic-only; no synthetic depot is added.
+  pinned.manifest_pins.emplace(7999, LuaManifestPin{7999, 888888888888ull, 0});
+  CHECK(SelectDepots(app, {}, {7000}, std::nullopt, pinned, &result));
+  CHECK(RejectedAs(result, 7999) == "profile-depot-not-listed");
+
   // 4.04 takes its own manifests and sizes; the DX12 depot has none there and is not taken from public.
   CHECK(SelectDepots(app, {}, {7000}, std::nullopt, DepotSelection{"", "4.04"}, &result));
   CHECK((Ids(result.depots) == U32s{7001, 7003}) && RejectedAs(result, 7002) == "branch");

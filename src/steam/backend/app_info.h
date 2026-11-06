@@ -1,5 +1,7 @@
 #pragma once
 
+#include "steam/backend/lua_manifest_profile.h"
+
 #include <cstdint>
 #include <map>
 #include <optional>
@@ -131,6 +133,8 @@ struct DepotSelection {
   std::string language;
   std::string branch = "public";
   std::set<std::uint32_t> excluded_dlc;
+  // Imported LuaTools version pins. The account's depot licence checks still run after selection.
+  std::map<std::uint32_t, LuaManifestPin> manifest_pins;
 };
 
 struct SelectionResult {
