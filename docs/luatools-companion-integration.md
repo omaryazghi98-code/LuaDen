@@ -36,7 +36,7 @@ Only a Steam game present in Playden's current library catalog can be targeted. 
 5. Playden's existing account-ownership, DLC, OS, branch and depot-access checks remain in place. A pin cannot create a depot or grant an entitlement. Steam's depot-access response remains authoritative.
 6. The manifest pins are written to the install record after a successful install/update, so later updates can reuse them.
 
-Profiles imported but not yet used by an install/update live in the current Playden session. A durable standalone profile library and profile management UI are not implemented yet.
+Imported profiles are persisted beside Playden's per-user game settings in `lua-manifest-profiles.txt`, and are reused by later installs and updates after a restart. This first version keeps one active profile per Steam app; LuaTools' multi-build vault and a native PS5 profile selector are not implemented yet.
 
 ## LuaTools desktop action
 
