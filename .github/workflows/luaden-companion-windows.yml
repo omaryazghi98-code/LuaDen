@@ -1,0 +1,26 @@
+name: LuaDen Companion Windows Build
+
+on:
+  push:
+    paths:
+      - "tools/LuaDenCompanion/**"
+      - ".github/workflows/luaden-companion-windows.yml"
+  pull_request:
+    paths:
+      - "tools/LuaDenCompanion/**"
+      - ".github/workflows/luaden-companion-windows.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+      - name: Build standalone companion
+        run: dotnet build tools/LuaDenCompanion/LuaDenCompanion.csproj --configuration Release
