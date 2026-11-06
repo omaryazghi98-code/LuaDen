@@ -1,26 +1,50 @@
-# LuaTools Companion Integration
+# LuaTools ↔ Playden integration
 
-Status: design baseline for `feature/luatools-bridge`.
+Status: first native manifest-profile path implemented on `feature/luatools-bridge`.
 
-## Goal
+## Current architecture
 
-Use a Windows PC running LuaTools as the main management workstation and a jailbroken PS5 running LuaDen/Playden as a companion target.
+Playden remains the native PS5 application and the source of truth for Steam account, library, depot selection and installs. LuaTools runs on the Windows PC and can send a selected LuaTools profile over Playden's existing paired LAN service.
 
-The first implementation should reuse Playden's existing LAN web service. Do not add a second PS5 HTTP server or duplicate pairing and file-transfer code unless a concrete missing capability requires it.
+The integration deliberately does not execute uploaded Lua. It extracts only active `setManifestid(depot, "manifest", size)` declarations. Other Lua statements, `addappid` keys and `addtoken` directives are ignored.
 
-LuaTools remains responsible for its own Windows-side library and workflows. The companion connection is a separate adapter initially; a later LuaTools fork/plugin can surface it inside the main app.
+## Implemented import route
 
-## Current LuaDen capabilities
+`POST /api/files/lua-profile?game=<steam-app-id>`
 
-The PS5 app already has a web service under `src/web/`:
+Requirements:
 
-- `server.cpp` / `server.h`: small HTTP/1.1 server. By default it tries ports 7031–7039 and listens on the console's network interfaces.
-- `service.cpp` / `service.h`: owns the server, status snapshot, browser page and API router.
-- `pairing.cpp` / `pairing.h`: six-digit, time-limited pairing code; lockout after repeated wrong attempts; random session token after successful pairing.
-- `files_api.cpp` / `files_api.h`: paired access to a catalog of game folders, file listing, download/ZIP, upload, folder creation, deletion, restore and size summaries.
-- `src/web/page/index.html`: existing browser client.
+- The PC must be paired using the existing six-digit pairing flow.
+- The request must include `X-Playden-Action: files`.
+- The body is the raw UTF-8 `.lua` file.
+- The file is limited to 2 MiB and the parser accepts at most 250 distinct manifest pins.
 
-The file API currently exposes:
+Successful response:
+
+```json
+{"ok":true,"app":12210,"pins":2}
+```
+
+Only a Steam game present in Playden's current library catalog can be targeted. The route does not accept arbitrary paths.
+
+## What happens after import
+
+1. The route validates the pairing and action header, reads the bounded request body and parses the profile.
+2. The Web worker queues the parsed profile; the Playden controller applies it to the model on the main thread.
+3. A new install or a game update carries the profile's manifest pins through the install queue.
+4. Depot selection applies a pin only to a depot already listed by the game's current app metadata.
+5. Playden's existing account-ownership, DLC, OS, branch and depot-access checks remain in place. A pin cannot create a depot or grant an entitlement. Steam's depot-access response remains authoritative.
+6. The manifest pins are written to the install record after a successful install/update, so later updates can reuse them.
+
+Profiles imported but not yet used by an install/update live in the current Playden session. A durable standalone profile library and profile management UI are not implemented yet.
+
+## LuaTools desktop action
+
+The `xLuaTools` branch `feature/ps5-luaden-companion` now has an **Import Lua profile to Playden** action in the PS5 Companion page. Select a Steam game, choose a local `.lua` file, and the companion posts it to the endpoint above using the existing in-memory paired session cookie.
+
+## Existing Playden APIs
+
+The LAN service still exposes the existing pairing and file-management APIs:
 
 | Method | Route | Purpose |
 | --- | --- | --- |
@@ -30,67 +54,28 @@ The file API currently exposes:
 | GET | `/api/files/games` | Read the game catalog |
 | GET | `/api/files/game?game=<id>` | Read one game's metadata and available roots |
 | GET | `/api/files/list?game=<id>&root=<root>&path=<path>` | List a folder |
+| POST | `/api/files/lua-profile?game=<steam-app-id>` | Import LuaTools manifest pins |
 | GET | `/api/files/download?game=<id>&root=<root>&path=<path>` | Download one file |
 | GET | `/api/files/zip?game=<id>&root=<root>&path=<path>` | Download a folder as ZIP |
-| GET | `/api/files/tree?game=<id>&root=<root>&path=<path>` | Summarize a folder |
 | POST | `/api/files/upload?game=<id>&root=<root>&path=<path>` | Upload/replace one file |
-| POST | `/api/files/mkdir?game=<id>&root=<root>&path=<path>` | Create a folder |
-| POST | `/api/files/delete?game=<id>&root=<root>&path=<path>` | Delete a file or folder |
-| POST | `/api/files/restore?game=<id>&root=<root>&path=<path>` | Restore a previous file version |
 
-State-changing pairing and file actions require the `X-Playden-Action: files` header. The pairing confirmation response sets the `playden_files` HttpOnly cookie; subsequent paired requests send that cookie.
+State-changing pairing and file actions require `X-Playden-Action: files`. Pairing confirmation sets the `playden_files` HttpOnly cookie. A native .NET client should not send an `Origin` header.
 
-## Recommended connection flow
+## Build and validation
 
-1. The Windows companion asks for the PS5's IPv4 address and web-service port (7031–7039; use the port shown in Playden's Web access settings).
-2. It calls `POST /api/pair/start` with `X-Playden-Action: files`.
-3. The user reads the six-digit code shown by Playden on the TV.
-4. The Windows companion calls `POST /api/pair/confirm?code=...` with the same action header and retains the returned cookie in a `.NET HttpClientHandler.CookieContainer`.
-5. It calls `GET /api/pair/status` and `GET /api/files/games`, then exposes the returned game catalog and allowed file roots to the desktop UI.
-6. Transfers use the existing file endpoints; progress is measured by the Windows client while streaming bytes.
+The Playden bridge branch now has a macOS host build/test workflow at `.github/workflows/luatools-bridge-ci.yml`. It uses the project's documented Apple Silicon build path:
 
-A native .NET client should not send an `Origin` header. If it does send one, Playden requires it to match the request's `Host` authority exactly.
+```sh
+scripts/build-homebrew.sh
+cmake --build --preset homebrew-host --parallel 2
+ctest --preset homebrew-host --output-on-failure
+```
 
-## Important current limitations
+The PS5 package still needs a device build/deploy and a live install/update test after CI succeeds. The web service uses plain HTTP; keep it on a trusted LAN and do not expose it to the public internet.
 
-- The service is available only while Playden is running. The README says starting a game closes Playden, so the Windows companion must show an offline/disconnected state during gameplay and reconnect when Playden is opened again.
-- Pairing tokens are held in the running Playden process. A Playden restart requires pairing again.
-- The current API is primarily a file-management API. It does not expose a remote import command, remote install queue, game launch command or general LuaTools control API.
-- The current `FileCatalog` contains game identity/status and file roots, but it is not a complete mirror of every internal Playden operation.
-- The web service uses plain HTTP. Treat it as trusted-LAN-only; do not expose it to the public internet.
+## Next native milestones
 
-## Proposed implementation phases
-
-### Phase 1 — Windows companion transport
-
-Create a small .NET 8 client that can:
-
-- configure and remember the PS5 IPv4 address;
-- request pairing and submit the on-screen code;
-- retain the session cookie for the current Playden session;
-- display connection state and the game catalog;
-- list and transfer files through the existing paired API;
-- handle disconnects, timeouts, 401 (re-pair), 503 (Playden busy) and interrupted transfers.
-
-This phase should not require changes to the Playden server.
-
-### Phase 2 — Safe import workflow
-
-Add a narrow, versioned API for a user-confirmed import workflow only if the existing file endpoints are insufficient. It should stage files under Playden's designated import area and hand the request to the existing Local library/import controller. It must not accept arbitrary filesystem paths or execute uploaded content.
-
-### Phase 3 — LuaTools-facing adapter
-
-Keep LuaTools installed and running on Windows. Add an optional UI entry point or plugin/adapter that opens the companion panel and passes app/game identifiers and user-selected local files. Do not assume LuaTools exposes a public extension API; verify the specific extension point before binding to it.
-
-### Phase 4 — Native PS5 companion UX
-
-Add a LuaTools/PC connection state and transfer visibility to LuaDen only if the Windows client needs PS5-side UI beyond the existing Web access and Queue screens.
-
-## Security and scope
-
-- Keep the existing six-digit pairing flow and random session token; never hard-code a token.
-- Store any Windows-side session material using Windows-protected storage, and discard it when the Playden session ends or pairing is revoked.
-- Keep the current Host/Origin checks and custom action-header requirement. Add tests before exposing new state-changing routes.
-- Use explicit game IDs and allow-listed file roots; never accept arbitrary absolute paths from the PC.
-- Transfers must be user-initiated, bounded and resumable where practical.
-- This integration is for managing and transferring game files the user is licensed to use, plus saves and ordinary configuration. It must not add features that bypass Steam ownership/entitlement checks or defeat DRM/anti-cheat protections.
+- A durable per-game profile store, independent of whether an install/update has already run.
+- A Playden-native profile browser/editor and per-depot enable/disable controls.
+- Import and profile status visible on the PS5 game details page.
+- Port additional LuaTools workflows that map cleanly to Playden's native runtime and settings model.
