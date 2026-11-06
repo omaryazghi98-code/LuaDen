@@ -128,6 +128,31 @@ void Controller::Start(app::PersistenceService* persistence_service) {
     });
 }
 Controller::~Controller() { Shutdown(); }
+
+void Controller::SetWebAccess(web::Service* web) {
+  if (web_ && web_ != web) web_->SetLuaManifestProfileHandler({});
+  web_ = web;
+  if (!web_) return;
+  web_->SetLuaManifestProfileHandler([this](std::uint32_t app, steam::LuaManifestProfile profile, std::string* reason) {
+    if (app == 0 || profile.pins.empty() || profile.pins.size() > steam::kMaxLuaManifestPins) {
+      if (reason) *reason = "The Lua manifest profile is empty or exceeds the supported limit.";
+      return false;
+    }
+    std::lock_guard<std::mutex> lock(lua_manifest_profile_mutex_);
+    pending_lua_manifest_profiles_[app] = std::move(profile);
+    return true;
+  });
+}
+
+void Controller::ApplyPendingLuaManifestProfiles() {
+  std::map<std::uint32_t, steam::LuaManifestProfile> pending;
+  {
+    std::lock_guard<std::mutex> lock(lua_manifest_profile_mutex_);
+    pending.swap(pending_lua_manifest_profiles_);
+  }
+  for (auto& [app, profile] : pending)
+    model_.SetLuaManifestProfile(GameId::Steam(app), std::move(profile));
+}
 void Controller::Shutdown() {
   if (shut_down_) return;
   shut_down_ = true;
@@ -153,7 +178,10 @@ void Controller::Shutdown() {
   };
   // The server source may inspect the install snapshot for its fallback payload.
   if(download_servers_) step("download-servers", [&] { download_servers_->Shutdown(); });
-  if(web_) step("web", [&] { web_->Shutdown(); });
+  if(web_) {
+    web_->SetLuaManifestProfileHandler({});
+    step("web", [&] { web_->Shutdown(); });
+  }
   if(library_) step("library", [&] { library_->Shutdown(); library_->Tick(); AdvanceClear(); });
   if(persistence_) step("persistence", [&] { persistence_->FlushAndShutdown(); AdvanceOrganizationClear(); });
   if(app_details_) step("details", [&] { app_details_->Shutdown(); });
@@ -311,6 +339,7 @@ void Controller::AdvanceOrganizationClear() {
 }
 void Controller::Tick() {
   if (!service_) return;
+  ApplyPendingLuaManifestProfiles();
   model_.SetWallClock(std::chrono::duration_cast<std::chrono::seconds>(
       std::chrono::system_clock::now().time_since_epoch()).count());
   for (const auto request : model_.TakeServiceActions()) {
