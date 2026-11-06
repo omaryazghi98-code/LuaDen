@@ -20,6 +20,17 @@ std::string_view Trim(std::string_view text) {
   return text;
 }
 
+bool EqualsAsciiCaseInsensitive(std::string_view left, std::string_view right) {
+  if (left.size() != right.size()) return false;
+  for (std::size_t index = 0; index < left.size(); ++index) {
+    char a = left[index], b = right[index];
+    if (a >= 'A' && a <= 'Z') a = static_cast<char>(a - 'A' + 'a');
+    if (b >= 'A' && b <= 'Z') b = static_cast<char>(b - 'A' + 'a');
+    if (a != b) return false;
+  }
+  return true;
+}
+
 bool Fail(std::string* reason, const char* message) {
   if (reason) *reason = message;
   return false;
@@ -46,7 +57,7 @@ bool Consume(std::string_view* input, char expected) {
 
 bool ParsePin(std::string_view line, LuaManifestPin* pin) {
   constexpr std::string_view name = "setManifestid";
-  if (line.substr(0, name.size()) != name) return false;
+  if (!EqualsAsciiCaseInsensitive(line.substr(0, name.size()), name)) return false;
   line.remove_prefix(name.size());
   if (!line.empty() && line.front() != ' ' && line.front() != '\t' && line.front() != '(') return false;
   if (!Consume(&line, '(')) return false;
@@ -59,7 +70,7 @@ bool ParsePin(std::string_view line, LuaManifestPin* pin) {
   line = Trim(line);
   if (!line.empty() && line.front() == ',') {
     line.remove_prefix(1);
-    if (!ReadUnsigned(&line, &size) || size == 0) return false;
+    if (!ReadUnsigned(&line, &size)) return false;
   }
   if (!Consume(&line, ')')) return false;
   line = Trim(line);
@@ -78,6 +89,9 @@ bool ParseLuaManifestProfile(std::string_view source, LuaManifestProfile* out, s
   if (!out) return Fail(reason, "No output profile was supplied.");
   *out = {};
   if (reason) reason->clear();
+  if (source.size() >= 3 && static_cast<unsigned char>(source[0]) == 0xEF &&
+      static_cast<unsigned char>(source[1]) == 0xBB && static_cast<unsigned char>(source[2]) == 0xBF)
+    source.remove_prefix(3);
   if (source.empty()) return Fail(reason, "The Lua file is empty.");
   if (source.size() > kMaxLuaManifestProfileBytes)
     return Fail(reason, "The Lua file exceeds the import size limit.");
@@ -92,7 +106,7 @@ bool ParseLuaManifestProfile(std::string_view source, LuaManifestProfile* out, s
 
     if (line.empty() || line.substr(0, 2) == "--") continue;
     constexpr std::string_view name = "setManifestid";
-    if (line.substr(0, name.size()) != name) continue;
+    if (!EqualsAsciiCaseInsensitive(line.substr(0, name.size()), name)) continue;
     if (line.size() > name.size() && line[name.size()] != ' ' &&
         line[name.size()] != '\t' && line[name.size()] != '(') continue;
 
