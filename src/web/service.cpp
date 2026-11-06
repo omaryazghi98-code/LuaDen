@@ -151,6 +151,9 @@ ServiceSnapshot Service::Snapshot() const {
 }
 
 void Service::SetFileCatalog(FileCatalog catalog) { files_.SetCatalog(std::move(catalog)); }
+void Service::SetLuaManifestProfileHandler(FilesApi::LuaManifestProfileImport handler) {
+  files_.SetLuaManifestProfileHandler(std::move(handler));
+}
 
 void Service::CancelPairing() { files_.CancelPairing(); }
 
