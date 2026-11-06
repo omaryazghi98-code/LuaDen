@@ -207,6 +207,7 @@ bool ValidOptionValue(std::string_view value) {
 
 // Past this a job's excluded DLC would not fit a registry line (Scan), and the game would be lost with its line.
 constexpr std::size_t kMaxRegisteredDlc = 1000;
+constexpr std::size_t kMaxRegisteredManifestPins = kMaxLuaManifestPins;
 
 InstallOptions Registrable(InstallOptions options) {
   if (!ValidOptionValue(options.language)) options.language.clear();
@@ -215,6 +216,12 @@ InstallOptions Registrable(InstallOptions options) {
   options.excluded_dlc.erase(std::unique(options.excluded_dlc.begin(), options.excluded_dlc.end()), options.excluded_dlc.end());
   options.excluded_dlc.erase(std::remove(options.excluded_dlc.begin(), options.excluded_dlc.end(), 0u), options.excluded_dlc.end());
   if (options.excluded_dlc.size() > kMaxRegisteredDlc) options.excluded_dlc.resize(kMaxRegisteredDlc);
+  for (auto it = options.manifest_pins.begin(); it != options.manifest_pins.end();) {
+    if (it->first == 0 || it->second.depot_id != it->first || it->second.manifest_gid == 0)
+      it = options.manifest_pins.erase(it);
+    else ++it;
+  }
+  if (options.manifest_pins.size() > kMaxRegisteredManifestPins) options.manifest_pins.clear();
   return options;
 }
 
@@ -267,7 +274,7 @@ std::optional<RegistryEntry> ParseRegistryLine(std::string_view line) {
       const auto field = fields.substr(0, tab);
       fields = tab == std::string_view::npos ? std::string_view{} : fields.substr(tab + 1);
       constexpr std::string_view kLanguage = "lang=", kBranch = "branch=", kMove = "move=", kFrom = "from=",
-                                 kFinished = "finished=", kNoDlc = "nodlc=", kEstimate = "est=";
+                                 kFinished = "finished=", kNoDlc = "nodlc=", kEstimate = "est=", kPins = "pins=";
       if (field == "paused") entry.paused = true;
       else if (field.substr(0, kMove.size()) == kMove && ValidVolumeId(field.substr(kMove.size())))
         entry.move_to = std::string(field.substr(kMove.size()));
@@ -277,6 +284,30 @@ std::optional<RegistryEntry> ParseRegistryLine(std::string_view line) {
       else if (field == "update") entry.update = true;
       else if (field.substr(0, kLanguage.size()) == kLanguage) entry.options.language = std::string(field.substr(kLanguage.size()));
       else if (field.substr(0, kBranch.size()) == kBranch) entry.options.branch = std::string(field.substr(kBranch.size()));
+      else if (field.substr(0, kPins.size()) == kPins) {
+        auto list = field.substr(kPins.size());
+        std::map<std::uint32_t, LuaManifestPin> pins;
+        bool valid = !list.empty();
+        while (valid && !list.empty()) {
+          const auto comma = list.find(',');
+          const auto part = list.substr(0, comma);
+          list = comma == std::string_view::npos ? std::string_view{} : list.substr(comma + 1);
+          const auto first = part.find(':');
+          const auto second = first == std::string_view::npos ? first : part.find(':', first + 1);
+          if (first == std::string_view::npos || second == std::string_view::npos || part.find(':', second + 1) != std::string_view::npos) { valid = false; break; }
+          std::uint32_t depot = 0; std::uint64_t gid = 0, size = 0;
+          const auto d = part.substr(0, first), g = part.substr(first + 1, second - first - 1), z = part.substr(second + 1);
+          const auto dp = std::from_chars(d.data(), d.data() + d.size(), depot);
+          const auto gp = std::from_chars(g.data(), g.data() + g.size(), gid);
+          const auto sp = std::from_chars(z.data(), z.data() + z.size(), size);
+          if (dp.ec != std::errc{} || dp.ptr != d.data() + d.size() || depot == 0 ||
+              gp.ec != std::errc{} || gp.ptr != g.data() + g.size() || gid == 0 ||
+              sp.ec != std::errc{} || sp.ptr != z.data() + z.size()) { valid = false; break; }
+          if (!pins.emplace(depot, LuaManifestPin{depot, gid, size}).second) { valid = false; break; }
+          if (pins.size() > kMaxRegisteredManifestPins) { valid = false; break; }
+        }
+        if (valid) entry.options.manifest_pins = std::move(pins);
+      }
       else if (field.substr(0, kEstimate.size()) == kEstimate) {
         const auto text = field.substr(kEstimate.size());
         std::uint64_t bytes = 0;
@@ -658,6 +689,15 @@ bool InstallService::SaveRegistry(bool sync) {
     if (!job.options.branch.empty()) fields += "\tbranch=" + job.options.branch;
     for (std::size_t index = 0; index < job.options.excluded_dlc.size(); ++index)
       fields += (index ? "," : "\tnodlc=") + std::to_string(job.options.excluded_dlc[index]);
+    if (!job.options.manifest_pins.empty()) {
+      fields += "\tpins=";
+      bool first_pin = true;
+      for (const auto& [id, pin] : job.options.manifest_pins) {
+        if (!first_pin) fields += ",";
+        fields += std::to_string(id) + ":" + std::to_string(pin.manifest_gid) + ":" + std::to_string(pin.size_on_disk);
+        first_pin = false;
+      }
+    }
     if (job.view.kind != InstallJobKind::kMove && job.estimated_bytes) fields += "\test=" + std::to_string(*job.estimated_bytes);
     return fields;
   };
@@ -798,6 +838,7 @@ std::string InstallService::Update(GameId id, const InstallOptions& options, std
   if (game->record) {
     if (job.options.language.empty()) job.options.language = game->record->language;
     if (job.options.branch.empty()) job.options.branch = game->record->branch;
+    if (job.options.manifest_pins.empty()) job.options.manifest_pins = game->record->manifest_pins;
   }
   job.options = Registrable(job.options);
   Admit(job, game->volume_id, estimated_bytes);
