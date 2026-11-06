@@ -1935,7 +1935,14 @@ void Simulation::queue_manage_updates(bool anyway) {
     }
     if (live() && !queue_fits(plan.games.size())) return;
     if (live())
-        for (const auto id : plan.games) pending_install_requests_.push_back({InstallRequestKind::Update, id});
+        for (const auto id : plan.games) {
+            InstallRequest request;
+            request.kind = InstallRequestKind::Update;
+            request.game_id = id;
+            if (const auto profile = lua_manifest_profiles_.find(id); profile != lua_manifest_profiles_.end())
+                request.manifest_pins = profile->second;
+            pending_install_requests_.push_back(std::move(request));
+        }
     manage_tabs_[ManageTab::Updates].selected.clear();
     show_manage_queue(plan.games.front());
     const auto* game = plan.games.size() == 1 ? find_game(state_, plan.games.front()) : nullptr;
@@ -9572,7 +9579,14 @@ void Simulation::activate() {
     } else if (action_name == "update-confirm") {
         const auto id = state_.navigation.detail_id.value_or(state_.navigation.selected_game_id);
         if (!update_check(id).allowed) return;
-        if (live()) pending_install_requests_.push_back({InstallRequestKind::Update, id});
+        if (live()) {
+            InstallRequest request;
+            request.kind = InstallRequestKind::Update;
+            request.game_id = id;
+            if (const auto profile = lua_manifest_profiles_.find(id); profile != lua_manifest_profiles_.end())
+                request.manifest_pins = profile->second;
+            pending_install_requests_.push_back(std::move(request));
+        }
         else push_notice({"update-" + ToKey(id), "Update queued", "", false, kLiveNoticeSeconds, false, "Fixture: nothing downloads"});
         close_modal();
         state_.navigation.focus_key = "details-play";
