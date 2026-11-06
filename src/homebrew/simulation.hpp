@@ -1265,6 +1265,7 @@ private:
     std::filesystem::path recipe_export_directory_;
     std::string console_firmware_;
     std::filesystem::path game_settings_file_;
+    std::filesystem::path lua_manifest_profiles_file_;
     std::map<GameId, playden::runtime::GameSettingsRecord> saved_game_settings_;
     std::map<GameId, std::map<std::uint32_t, playden::steam::LuaManifestPin>> lua_manifest_profiles_;
     bool settings_save_failed_ = false;
