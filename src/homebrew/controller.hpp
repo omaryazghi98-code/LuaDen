@@ -58,7 +58,7 @@ class Controller {
   void SetSelfUpdate(update::UpdateService* self_update) { self_update_ = self_update; }
   // Settings › Web access turns it on and off (once the saved preferences are read); the signed-in account's
   // name and SteamID go to it for redaction. Shutdown stops it.
-  void SetWebAccess(web::Service* web) { web_ = web; }
+  void SetWebAccess(web::Service* web);
   // Receives one line per shutdown step with how long it took, so a quit that hangs names the step.
   void SetShutdownLog(std::function<void(const std::string&)> log) { shutdown_log_ = std::move(log); }
   // Preferences and organization load/save failures (app::PersistenceController::SetLog). The first loads
@@ -119,6 +119,9 @@ class Controller {
   bool DownloadServerTestAllowed() const;
   steam::DownloadServerService* download_servers_ = nullptr;
   web::Service* web_ = nullptr;
+  std::mutex lua_manifest_profile_mutex_;
+  std::map<std::uint32_t, steam::LuaManifestProfile> pending_lua_manifest_profiles_;
+  void ApplyPendingLuaManifestProfiles();
   void TickWebAccess();
   // Reports what the page's Files tab offers, about once a second, and keeps the running games current while it is in use.
   void TickWebFiles();
