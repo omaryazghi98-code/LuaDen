@@ -8,6 +8,7 @@
 #include "library/update_check.h"
 #include "library/model.h"
 #include "runtime/game_settings.h"
+#include "steam/backend/lua_manifest_profile.h"
 #include "steam/backend/content_language.h"
 
 #include <algorithm>
@@ -95,6 +96,7 @@ struct InstallRequest {
     std::optional<std::uint64_t> install_bytes;
     // Install: the DLC turned off in the install sheet, sorted.
     std::vector<std::uint32_t> excluded_dlc;
+    std::map<std::uint32_t, playden::steam::LuaManifestPin> manifest_pins;
 };
 // Game maintenance the details page offers (simulated in fixture mode).
 enum class MaintenanceKind { ApplySettings, ClearShaderCache, Repair, BackupSaves, RecreateBottle, UpdateRuntime };
@@ -1166,6 +1168,8 @@ public:
     // Presets and recipes for the Game settings sheet (runtime/presets.json, runtime/recipes/).
     void SetSettingsData(std::vector<playden::runtime::SettingsPreset> presets,
                          std::vector<playden::runtime::GameRecipe> recipes);
+    // Import a parsed LuaTools profile for a Steam game. It changes only manifest versions; depot licence checks remain native.
+    void SetLuaManifestProfile(GameId id, playden::steam::LuaManifestProfile profile);
     void SetKitCapabilities(playden::runtime::KitCapabilities kit);
     // Live mode: where per-game settings are kept (loaded now, saved on every change).
     void SetGameSettingsFile(std::filesystem::path path);
@@ -1262,6 +1266,7 @@ private:
     std::string console_firmware_;
     std::filesystem::path game_settings_file_;
     std::map<GameId, playden::runtime::GameSettingsRecord> saved_game_settings_;
+    std::map<GameId, std::map<std::uint32_t, playden::steam::LuaManifestPin>> lua_manifest_profiles_;
     bool settings_save_failed_ = false;
     bool settings_load_failed_ = false;
     std::optional<playden::runtime::GameSettingsRecord> settings_opened_record_;  // for the close toast
