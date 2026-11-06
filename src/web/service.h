@@ -56,6 +56,7 @@ class Service {
   ServiceSnapshot Snapshot() const;
   // What the Files tab offers; the controller keeps it current.
   void SetFileCatalog(FileCatalog catalog);
+  void SetLuaManifestProfileHandler(FilesApi::LuaManifestProfileImport handler);
   // The player dismissed the pairing code on the TV.
   void CancelPairing();
   // A paired browser used the Files tab in the last half a minute.
