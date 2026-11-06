@@ -11299,6 +11299,24 @@ void Simulation::SetLuaManifestProfile(GameId id, playden::steam::LuaManifestPro
     }
     if (pins.empty()) lua_manifest_profiles_.erase(id);
     else lua_manifest_profiles_[id] = std::move(pins);
+
+    if (!lua_manifest_profiles_file_.empty()) {
+        playden::steam::LuaManifestProfileLibrary saved;
+        for (const auto& [game, entries] : lua_manifest_profiles_) {
+            const auto app = game.steam_app();
+            if (!app || entries.empty()) continue;
+            auto& stored = saved[*app].pins;
+            stored.reserve(entries.size());
+            for (const auto& [depot, pin] : entries) {
+                (void)depot;
+                stored.push_back(pin);
+            }
+        }
+        std::string reason;
+        if (!playden::steam::SaveLuaManifestProfileStore(lua_manifest_profiles_file_, saved, &reason))
+            push_notice({"lua-profile-save-failed", "LuaTools profile could not be saved", "", false,
+                         kLiveNoticeSeconds, true, reason});
+    }
 }
 
 void Simulation::SetSettingsData(std::vector<rt::SettingsPreset> presets, std::vector<rt::GameRecipe> recipes) {
@@ -11321,6 +11339,20 @@ void Simulation::SetGameSettingsFile(std::filesystem::path path) {
     }
     state_.game_settings = std::move(records);
     saved_game_settings_ = state_.game_settings;
+    lua_manifest_profiles_file_ = game_settings_file_.parent_path() / "lua-manifest-profiles.txt";
+    playden::steam::LuaManifestProfileLibrary profiles;
+    std::string profile_reason;
+    if (playden::steam::LoadLuaManifestProfileStore(lua_manifest_profiles_file_, &profiles, &profile_reason)) {
+        lua_manifest_profiles_.clear();
+        for (auto& [app, profile] : profiles) {
+            std::map<std::uint32_t, playden::steam::LuaManifestPin> pins;
+            for (const auto& pin : profile.pins) pins.emplace(pin.depot_id, pin);
+            if (!pins.empty()) lua_manifest_profiles_[GameId::Steam(app)] = std::move(pins);
+        }
+    } else {
+        push_notice({"lua-profile-load-failed", "LuaTools profiles could not be read", "", false,
+                     kLiveNoticeSeconds, true, profile_reason});
+    }
     rebuild_view();
 }
 
