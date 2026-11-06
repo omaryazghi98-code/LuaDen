@@ -3,7 +3,9 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <map>
 #include <optional>
+#include "steam/backend/lua_manifest_profile.h"
 #include <string>
 #include <string_view>
 #include <vector>
@@ -33,10 +35,17 @@ struct InstalledRecord {
   std::vector<RecordedDepot> depots;
   // DLC the player turned off when installing: its updates leave them out too, and they don't count as new DLC.
   std::vector<std::uint32_t> excluded_dlc;
+  std::map<std::uint32_t, LuaManifestPin> manifest_pins;
   bool operator==(const InstalledRecord& other) const {
-    return version == other.version && app_id == other.app_id && install_bytes == other.install_bytes &&
-           branch == other.branch && language == other.language && depots == other.depots &&
-           excluded_dlc == other.excluded_dlc;
+    if (version != other.version || app_id != other.app_id || install_bytes != other.install_bytes ||
+        branch != other.branch || language != other.language || depots != other.depots ||
+        excluded_dlc != other.excluded_dlc || manifest_pins.size() != other.manifest_pins.size()) return false;
+    for (const auto& [id, pin] : manifest_pins) {
+      const auto found = other.manifest_pins.find(id);
+      if (found == other.manifest_pins.end() || pin.depot_id != found->second.depot_id ||
+          pin.manifest_gid != found->second.manifest_gid || pin.size_on_disk != found->second.size_on_disk) return false;
+    }
+    return true;
   }
 };
 

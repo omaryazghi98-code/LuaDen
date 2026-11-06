@@ -762,6 +762,9 @@ void InstallRecordsParse(const std::filesystem::path& root) {
       "{\"id\":330,\"manifest\":\"6\",\"owner\":330,\"source\":330}]}");
   CHECK(v2 && v2->version == 2 && v2->branch == "beta" && v2->language == "german");
   CHECK((v2->depots == std::vector<RecordedDepot>{{221, 5, 220, 220}, {330, 6, 330, 330}}));
+  const auto pinned_record = ParseInstallRecord("{\"version\":2,\"app_id\":220,\"manifest_pins\":[{\"depot\":221,\"manifest\":\"18446744073709551615\",\"size\":\"12345\"}]}");
+  CHECK(pinned_record && pinned_record->manifest_pins.size() == 1 && pinned_record->manifest_pins.at(221).manifest_gid == 18446744073709551615ull &&
+        pinned_record->manifest_pins.at(221).size_on_disk == 12345ull);
   // An imported game's copy and the test fakes' records: no version, no depots.
   const auto copy = ParseInstallRecord("{\"version\":1,\"app_id\":4026531841,\"store\":\"local\",\"game\":\"x\",\"install_bytes\":7}");
   CHECK(copy && copy->app_id == 4026531841u && copy->depots.empty() && copy->install_bytes == 7);

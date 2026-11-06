@@ -1027,6 +1027,18 @@ InstallOutcome DepotInstaller::Run(const StoredSession& session, const InstallTa
         text += (index ? "," : "") + std::to_string(target.excluded_dlc[index]);
       text += "]";
     }
+    if (!target.manifest_pins.empty()) {
+      text += ",\"manifest_pins\":[";
+      bool first_pin = true;
+      for (const auto& [id, pin] : target.manifest_pins) {
+        if (pin.depot_id != id || pin.manifest_gid == 0) continue;
+        text += std::string(first_pin ? "" : ",") + "{\"depot\":" + std::to_string(id) +
+                ",\"manifest\":\"" + std::to_string(pin.manifest_gid) + "\",\"size\":\"" +
+                std::to_string(pin.size_on_disk) + "\"}";
+        first_pin = false;
+      }
+      text += "]";
+    }
     text += ",\"depots\":[";
     for (std::size_t index = 0; index < access.grants.size(); ++index) {
       // Grants skip refused depots, so the selection is looked up by id.

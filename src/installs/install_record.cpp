@@ -67,6 +67,18 @@ std::optional<InstalledRecord> ParseInstallRecord(std::string_view text) {
   if (const auto* excluded = root->Find("excluded_dlc"); excluded && excluded->is_array())
     for (const auto& entry : excluded->array())
       if (const auto dlc = AsUint32(&entry); dlc && *dlc != 0) record.excluded_dlc.push_back(*dlc);
+  if (const auto* pins = root->Find("manifest_pins"); pins && pins->is_array()) {
+    for (const auto& entry : pins->array()) {
+      if (!entry.is_object()) return std::nullopt;
+      const auto depot = AsUint32(entry.Find("depot"));
+      const auto gid = AsGid(entry.Find("manifest"));
+      const auto size = AsGid(entry.Find("size")).value_or(0);
+      if (!depot || *depot == 0 || !gid || *gid == 0) return std::nullopt;
+      LuaManifestPin pin{*depot, *gid, size};
+      if (!record.manifest_pins.emplace(*depot, pin).second) return std::nullopt;
+      if (record.manifest_pins.size() > kMaxLuaManifestPins) return std::nullopt;
+    }
+  }
   return record;
 }
 
