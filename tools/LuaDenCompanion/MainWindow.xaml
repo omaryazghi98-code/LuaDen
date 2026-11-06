@@ -27,7 +27,7 @@
                 </StackPanel>
                 <StackPanel Grid.Column="1">
                     <TextBlock FontWeight="SemiBold" Text="Port"/>
-                    <TextBox x:Name="PortBox" Text="8080"/>
+                    <TextBox x:Name="PortBox" Text="7031"/>
                 </StackPanel>
                 <Button Grid.Column="2" Margin="10,20,3,3" Content="Connect" Click="Connect_Click"/>
                 <Button Grid.Column="3" Margin="3,20,3,3" Content="Start pairing" Click="StartPairing_Click"/>
@@ -40,7 +40,7 @@
         </Border>
 
         <TextBlock x:Name="HelpText" Grid.Row="1" Margin="4,9,4,12" Foreground="#4B5563"
-                   Text="Connect to Playden on the same trusted LAN. Pairing credentials remain in memory only."/>
+                   Text="Playden usually uses ports 7031–7039. Check Settings › Web access on the PS5. Pairing credentials remain in memory only."/>
 
         <Grid Grid.Row="2">
             <Grid.ColumnDefinitions>
