@@ -2,6 +2,7 @@
 #pragma once
 
 #include "web/file_store.h"
+#include "steam/backend/lua_manifest_profile.h"
 #include "web/pairing.h"
 #include "web/router.h"
 
@@ -58,9 +59,11 @@ inline constexpr int kMaxTransfers = 2;
 // something also needs X-Playden-Action: files (Service refuses another Origin, and a name in Host, before this).
 class FilesApi {
  public:
+  using LuaManifestProfileImport = std::function<bool(std::uint32_t, steam::LuaManifestProfile, std::string*)>;
   explicit FilesApi(FilesConfig config);
   void Register(Router& router);
   void SetCatalog(FileCatalog catalog);
+  void SetLuaManifestProfileHandler(LuaManifestProfileImport handler);
   std::string PairingCode() const;
   void CancelPairing();
   // A paired browser asked for something in the last half a minute.
@@ -82,6 +85,7 @@ class FilesApi {
   FileStore store_;
   mutable std::mutex mutex_;
   FileCatalog catalog_;
+  LuaManifestProfileImport lua_manifest_profile_import_;
   std::atomic<int> transfers_{0};
   std::atomic<std::int64_t> last_used_{0};  // steady seconds; 0: never
 };
