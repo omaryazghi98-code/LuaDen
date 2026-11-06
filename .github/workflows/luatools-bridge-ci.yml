@@ -1,0 +1,43 @@
+name: LuaTools bridge - Playden host build
+
+on:
+  push:
+    branches:
+      - feature/luatools-bridge
+  pull_request:
+    branches:
+      - main
+      - feature/luatools-bridge
+
+permissions:
+  contents: read
+
+concurrency:
+  group: luatools-bridge-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  host-build-and-tests:
+    runs-on: macos-15
+    timeout-minutes: 90
+    steps:
+      - name: Check out Playden and pinned submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Install host build tools
+        run: |
+          brew install cmake ninja pkgconf sdl2-compat llvm@18 python
+
+      - name: Build pinned host network dependencies
+        env:
+          JOBS: 2
+        run: scripts/build-homebrew.sh
+
+      - name: Build Playden host target
+        run: cmake --build --preset homebrew-host --parallel 2
+
+      - name: Run tests
+        run: ctest --preset homebrew-host --output-on-failure
