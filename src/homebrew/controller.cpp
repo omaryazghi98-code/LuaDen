@@ -2148,7 +2148,7 @@ void Controller::TickInstalls() {
       case InstallRequestKind::Update: {
         // The record's branch and language select. Nothing is reserved up front: the details' estimate counts
         // whole depots, and the update checks the room its changed files need before it downloads them.
-        if (const auto refused = installs_->Update(request.game_id, {}); !refused.empty())
+        if (const auto refused = installs_->Update(request.game_id, {{}, {}, {}, request.manifest_pins}); !refused.empty())
           model_.NotifyUpdateRefused(request.game_id, refused);
         break;
       }
