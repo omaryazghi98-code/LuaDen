@@ -27,6 +27,6 @@ bool ParseLuaManifestProfile(std::string_view source, LuaManifestProfile* out,
                              std::string* reason = nullptr);
 
 inline constexpr std::size_t kMaxLuaManifestProfileBytes = 2u * 1024u * 1024u;
-inline constexpr std::size_t kMaxLuaManifestPins = 4096;
+inline constexpr std::size_t kMaxLuaManifestPins = 250;
 
 }  // namespace playden::steam
