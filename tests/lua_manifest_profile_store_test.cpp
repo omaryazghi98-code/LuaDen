@@ -11,7 +11,7 @@ namespace fs = std::filesystem;
 
 int main() {
   const auto stamp = std::chrono::steady_clock::now().time_since_epoch().count();
-  const fs::path base = fs::temp_directory_path() / ("playden-lua-manifest-store-" + std::to_string(stamp));
+  const fs::path base = fs::canonical(fs::temp_directory_path()) / ("playden-lua-manifest-store-" + std::to_string(stamp));
   const fs::path path = base / "profiles" / "lua-manifest-profiles.txt";
   std::string reason;
 
