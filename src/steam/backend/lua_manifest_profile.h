@@ -2,6 +2,8 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <filesystem>
+#include <map>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -21,6 +23,8 @@ struct LuaManifestProfile {
   std::vector<LuaManifestPin> pins;
 };
 
+using LuaManifestProfileLibrary = std::map<std::uint32_t, LuaManifestProfile>;
+
 // Extract active setManifestid calls only. Full-line Lua comments and all non-pin statements are ignored.
 // A malformed pin or conflicting duplicate fails the whole import; no Lua code is executed.
 bool ParseLuaManifestProfile(std::string_view source, LuaManifestProfile* out,
@@ -28,5 +32,13 @@ bool ParseLuaManifestProfile(std::string_view source, LuaManifestProfile* out,
 
 inline constexpr std::size_t kMaxLuaManifestProfileBytes = 2u * 1024u * 1024u;
 inline constexpr std::size_t kMaxLuaManifestPins = 250;
+inline constexpr std::size_t kMaxLuaManifestProfiles = 4096;
+inline constexpr std::size_t kMaxLuaManifestProfileStoreBytes = 8u * 1024u * 1024u;
+
+// Read/write a per-user library of profiles. The text store contains numeric IDs only, never Lua source or keys.
+bool LoadLuaManifestProfileStore(const std::filesystem::path& path, LuaManifestProfileLibrary* out,
+                                 std::string* reason = nullptr);
+bool SaveLuaManifestProfileStore(const std::filesystem::path& path, const LuaManifestProfileLibrary& profiles,
+                                 std::string* reason = nullptr);
 
 }  // namespace playden::steam
