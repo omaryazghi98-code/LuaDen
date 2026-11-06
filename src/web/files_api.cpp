@@ -2,6 +2,7 @@
 #include "web/files_api.h"
 
 #include <algorithm>
+#include <charconv>
 #include <chrono>
 #include <cstdio>
 #include <unistd.h>
@@ -141,6 +142,11 @@ void FilesApi::SetCatalog(FileCatalog catalog) {
   catalog_ = std::move(catalog);
 }
 
+void FilesApi::SetLuaManifestProfileHandler(LuaManifestProfileImport handler) {
+  std::lock_guard<std::mutex> lock(mutex_);
+  lua_manifest_profile_import_ = std::move(handler);
+}
+
 std::string FilesApi::PairingCode() const { return pairing_.ActiveCode(); }
 
 void FilesApi::CancelPairing() { pairing_.Cancel(); }
@@ -262,6 +268,49 @@ void FilesApi::Register(Router& router) {
   });
   router.Exact("/api/pair/status", [this](const Request& request, const std::string&, Response& response) {
     SendJson(response, 200, "{" + Field("paired", Paired(request)) + "}");
+  });
+
+  // Import a LuaTools profile as data, never as executable Lua. The controller queues it onto the
+  // main thread; depot selection later applies the pins only after Steam's native licence checks.
+  router.Post("/api/files/lua-profile", [this](const Request& request, const std::string&, Response& response) {
+    if (!RequirePaired(request, response) || !RequireAction(request, response)) return;
+    const auto app_text = QueryValue(request.query, "game");
+    std::uint32_t app = 0;
+    if (!app_text || app_text->empty()) return SendError(response, 400, "Supply the Steam app ID in game.");
+    const auto parsed = std::from_chars(app_text->data(), app_text->data() + app_text->size(), app);
+    if (parsed.ec != std::errc{} || parsed.ptr != app_text->data() + app_text->size() || app == 0)
+      return SendError(response, 400, "The Steam app ID is invalid.");
+    if (!request.content_length) return SendError(response, 411, "Send the Lua file's length.");
+    if (*request.content_length == 0 || *request.content_length > steam::kMaxLuaManifestProfileBytes)
+      return SendError(response, 413, "The Lua profile is empty or exceeds the 2 MiB import limit.");
+    if (!request.read_body) return SendError(response, 400, "No request body.");
+    const auto game = Game("steam-" + std::to_string(app));
+    if (!game || game->kind != "steam" || game->app != app)
+      return SendError(response, 404, "That Steam game is not in Playden's library.");
+    std::string source;
+    source.reserve(static_cast<std::size_t>(*request.content_length));
+    std::uint64_t remaining = *request.content_length;
+    char buffer[8192];
+    while (remaining > 0) {
+      const auto count = request.read_body(buffer, static_cast<std::size_t>(std::min<std::uint64_t>(remaining, sizeof(buffer))));
+      if (count <= 0) return SendError(response, 400, "The Lua profile upload ended early.");
+      source.append(buffer, static_cast<std::size_t>(count));
+      remaining -= static_cast<std::uint64_t>(count);
+    }
+    steam::LuaManifestProfile profile;
+    std::string reason;
+    if (!steam::ParseLuaManifestProfile(source, &profile, &reason))
+      return SendError(response, 400, reason.empty() ? "The Lua profile could not be read." : reason);
+    LuaManifestProfileImport handler;
+    {
+      std::lock_guard<std::mutex> lock(mutex_);
+      handler = lua_manifest_profile_import_;
+    }
+    if (!handler) return SendError(response, 503, "Lua profile import is not available in this Playden session.");
+    const auto count = profile.pins.size();
+    if (!handler(app, std::move(profile), &reason))
+      return SendError(response, 409, reason.empty() ? "Playden couldn't accept this Lua profile." : reason);
+    SendJson(response, 200, "{\"ok\":true," + Number("app", app) + "," + Number("pins", count) + "}");
   });
 
   router.Exact("/api/files/games", [this](const Request& request, const std::string&, Response& response) {
